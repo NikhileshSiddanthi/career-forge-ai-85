@@ -107,7 +107,7 @@ export default function Onboarding() {
     
     setIsSubmitting(true);
     try {
-      // Save quiz responses
+      // Save quiz responses (upsert to handle existing records)
       const { error: quizError } = await supabase
         .from('quiz_responses')
         .upsert({
@@ -119,7 +119,7 @@ export default function Onboarding() {
           career_goals: quizData.careerGoals,
           existing_role: quizData.existingRole,
           learning_time_weekly: quizData.learningTimeWeekly,
-        });
+        }, { onConflict: 'user_id' });
 
       if (quizError) throw quizError;
 
