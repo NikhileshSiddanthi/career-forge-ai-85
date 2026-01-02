@@ -108,6 +108,7 @@ export default function Index() {
               <Button
                 variant="outline"
                 size="lg"
+                onClick={() => navigate('/roles')}
                 className="terminal-border hover:bg-secondary px-8 py-6 text-lg"
               >
                 Explore Roles
