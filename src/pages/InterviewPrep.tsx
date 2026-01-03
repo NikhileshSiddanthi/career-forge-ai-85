@@ -36,7 +36,7 @@ interface CareerRole {
   slug: string;
 }
 
-type ViewState = 'select-company' | 'select-round' | 'simulation';
+type ViewState = 'select-role' | 'select-company' | 'select-round' | 'simulation';
 
 export default function InterviewPrep() {
   const { slug } = useParams<{ slug: string }>();
@@ -51,11 +51,11 @@ export default function InterviewPrep() {
   const [selectedRound, setSelectedRound] = useState<InterviewRound | null>(null);
   const [completedRounds, setCompletedRounds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [viewState, setViewState] = useState<ViewState>('select-company');
+  const [viewState, setViewState] = useState<ViewState>('select-role');
 
   useEffect(() => {
     fetchData();
-  }, [slug]);
+  }, [slug, user]);
 
   const fetchData = async () => {
     try {
@@ -75,18 +75,48 @@ export default function InterviewPrep() {
       
       setRoles(rolesData || []);
 
-      // If slug provided, set that role
+      // If slug provided in URL, set that role directly
       if (slug) {
         const role = rolesData?.find(r => r.slug === slug);
         if (role) {
           setSelectedRole(role);
+          setViewState('select-company');
+          setLoading(false);
+          return;
         }
       }
+
+      // Check if logged-in user has a selected career path
+      if (user) {
+        const { data: careerPath } = await supabase
+          .from('user_career_paths')
+          .select('role_id, career_roles(id, title, slug)')
+          .eq('user_id', user.id)
+          .order('selected_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (careerPath && careerPath.career_roles) {
+          const roleData = careerPath.career_roles as unknown as CareerRole;
+          setSelectedRole(roleData);
+          setViewState('select-company');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // No role selected, show role selection
+      setViewState('select-role');
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectRole = (role: CareerRole) => {
+    setSelectedRole(role);
+    setViewState('select-company');
   };
 
   const selectCompany = async (company: Company) => {
@@ -241,32 +271,67 @@ export default function InterviewPrep() {
             Practice real interview rounds with AI-powered evaluation and feedback
           </p>
 
-          {/* Role selector */}
-          {viewState === 'select-company' && roles.length > 0 && (
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
+        {/* Show current role if selected */}
+          {selectedRole && viewState !== 'select-role' && (
+            <div className="mt-4 flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Preparing for:</span>
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant={!selectedRole ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedRole(null)}
-                >
-                  All Roles
-                </Button>
-                {roles.slice(0, 5).map((role) => (
-                  <Button
-                    key={role.id}
-                    variant={selectedRole?.id === role.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedRole(role)}
-                  >
-                    {role.title}
-                  </Button>
-                ))}
-              </div>
+              <Badge variant="outline" className="text-primary border-primary">
+                {selectedRole.title}
+              </Badge>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setSelectedRole(null);
+                  setSelectedCompany(null);
+                  setViewState('select-role');
+                }}
+                className="text-xs"
+              >
+                Change Role
+              </Button>
             </div>
           )}
         </div>
+
+        {/* Role Selection View */}
+        {viewState === 'select-role' && (
+          <div className="space-y-6">
+            <div className="bg-card/80 backdrop-blur-sm rounded-xl p-8 terminal-border text-center mb-8">
+              <GraduationCap className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-foreground mb-2">
+                What role are you preparing for?
+              </h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Select your target role to get role-specific interview questions and preparation
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {roles.map((role) => (
+                <button
+                  key={role.id}
+                  onClick={() => selectRole(role)}
+                  className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border text-left hover:border-primary transition-all hover:scale-[1.02] group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                      <Briefcase className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-foreground group-hover:text-primary transition-colors">
+                        {role.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Practice interviews for this role
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Content based on view state */}
         {viewState === 'select-company' && (
