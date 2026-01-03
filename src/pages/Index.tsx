@@ -50,6 +50,22 @@ export default function Index() {
         </div>
         
         <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/roles')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Explore Roles
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/interview-prep')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Interview Prep
+          </Button>
           {user ? (
             <>
               <Button
