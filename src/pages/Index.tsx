@@ -82,14 +82,6 @@ export default function Index() {
           >
             Jobs
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/code-playground')}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Code Lab
-          </Button>
           {user ? (
             <>
               <Button

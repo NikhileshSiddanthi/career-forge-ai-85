@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { streamAISensei } from '@/lib/api/ai-sensei';
 import { toast } from 'sonner';
+import { CodeExercise } from '@/components/learn/CodeExercise';
+import { CertificateModal } from '@/components/learn/CertificateModal';
 
 interface Course {
   id: string;
@@ -51,6 +53,12 @@ interface ChatMessage {
   content: string;
 }
 
+interface Certificate {
+  id: string;
+  certificate_number: string;
+  issued_at: string;
+}
+
 const LESSON_TYPE_ICONS = {
   reading: FileText,
   video: Play,
@@ -69,6 +77,9 @@ export default function Learn() {
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [currentCourse, setCurrentCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
+  const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [showCertificate, setShowCertificate] = useState(false);
   
   // AI Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -81,12 +92,25 @@ export default function Learn() {
       navigate('/auth');
     } else if (user && slug) {
       fetchLearningData();
+      fetchUserProfile();
     }
   }, [user, authLoading, slug]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', user.id)
+      .single();
+    if (data?.full_name) {
+      setUserName(data.full_name);
+    }
+  };
 
   const fetchLearningData = async () => {
     if (!slug || !user) return;
@@ -117,7 +141,19 @@ export default function Learn() {
         return;
       }
 
-      setLearningPath({ ...pathData, career_roles: roleData } as any);
+      setLearningPath({ ...pathData, career_roles: roleData } as LearningPath);
+
+      // Check for existing certificate
+      const { data: certData } = await supabase
+        .from('certificates')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('learning_path_id', pathData.id)
+        .single();
+
+      if (certData) {
+        setCertificate(certData);
+      }
 
       // Ensure user has this career path
       await supabase
@@ -145,7 +181,7 @@ export default function Learn() {
 
       const sortedCourses = (coursesData || []).map(course => ({
         ...course,
-        lessons: (course.lessons || []).sort((a: any, b: any) => a.order_index - b.order_index),
+        lessons: (course.lessons || []).sort((a: Lesson, b: Lesson) => a.order_index - b.order_index),
       }));
 
       setCourses(sortedCourses);
@@ -159,19 +195,21 @@ export default function Learn() {
       setCompletedLessons(new Set((completedData || []).map(c => c.lesson_id)));
 
       // Set first incomplete lesson as current
+      let foundCurrent = false;
       for (const course of sortedCourses) {
         for (const lesson of course.lessons) {
           if (!completedData?.some(c => c.lesson_id === lesson.id)) {
             setCurrentCourse(course);
             setCurrentLesson(lesson);
+            foundCurrent = true;
             break;
           }
         }
-        if (currentLesson) break;
+        if (foundCurrent) break;
       }
 
       // If all complete, set last lesson
-      if (!currentLesson && sortedCourses.length > 0) {
+      if (!foundCurrent && sortedCourses.length > 0) {
         const lastCourse = sortedCourses[sortedCourses.length - 1];
         const lastLesson = lastCourse.lessons[lastCourse.lessons.length - 1];
         setCurrentCourse(lastCourse);
@@ -195,7 +233,8 @@ export default function Learn() {
           lesson_id: currentLesson.id,
         }, { onConflict: 'user_id,lesson_id' });
 
-      setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
+      const newCompletedLessons = new Set([...completedLessons, currentLesson.id]);
+      setCompletedLessons(newCompletedLessons);
 
       // Find next lesson
       const currentCourseIndex = courses.findIndex(c => c.id === currentCourse?.id);
@@ -209,21 +248,26 @@ export default function Learn() {
         setCurrentLesson(nextCourse.lessons[0]);
       } else {
         // All lessons complete - check for certificate
-        const allLessonsComplete = courses.every(c => 
-          c.lessons.every(l => completedLessons.has(l.id) || l.id === currentLesson.id)
-        );
+        const totalLessons = courses.reduce((acc, c) => acc + c.lessons.length, 0);
+        const allComplete = newCompletedLessons.size >= totalLessons;
 
-        if (allLessonsComplete && learningPath) {
-          await supabase
+        if (allComplete && learningPath && !certificate) {
+          const certNumber = `SF-${Date.now().toString(36).toUpperCase()}`;
+          const { data: newCert } = await supabase
             .from('certificates')
-            .upsert({
+            .insert({
               user_id: user.id,
               learning_path_id: learningPath.id,
-              certificate_number: `SF-${Date.now().toString(36).toUpperCase()}`,
-            }, { onConflict: 'user_id,learning_path_id' });
+              certificate_number: certNumber,
+            })
+            .select()
+            .single();
 
-          toast.success('🎉 Congratulations! You earned a certificate!');
-          navigate('/dashboard');
+          if (newCert) {
+            setCertificate(newCert);
+            setShowCertificate(true);
+            toast.success('🎉 Congratulations! You earned a certificate!');
+          }
         }
       }
     } catch (error) {
@@ -268,6 +312,88 @@ export default function Learn() {
     });
   };
 
+  // Extract code block from lesson content
+  const extractCodeFromContent = (content: string): string | null => {
+    const codeBlockMatch = content.match(/```(?:javascript|js|html|css)?\n([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      return codeBlockMatch[1].trim();
+    }
+    return null;
+  };
+
+  const renderLessonContent = () => {
+    if (!currentLesson?.content) {
+      return (
+        <div className="bg-secondary/50 rounded-xl p-8 text-center">
+          <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">
+            Lesson content is being prepared by AI Sensei. 
+            Ask questions in the chat to learn more!
+          </p>
+        </div>
+      );
+    }
+
+    // If it's a coding lesson, show code editor
+    if (currentLesson.lesson_type === 'coding') {
+      const starterCode = extractCodeFromContent(currentLesson.content);
+      
+      // Split content to show description before code
+      const contentParts = currentLesson.content.split(/```(?:javascript|js|html|css)?/);
+      const description = contentParts[0] || '';
+
+      return (
+        <div className="space-y-6">
+          <div className="prose prose-invert max-w-none whitespace-pre-wrap">
+            {description}
+          </div>
+          
+          {starterCode && (
+            <CodeExercise
+              starterCode={starterCode}
+              language="javascript"
+              onComplete={markLessonComplete}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // Regular lesson - render markdown-style content
+    return (
+      <div className="prose prose-invert max-w-none">
+        {currentLesson.content.split('\n').map((line, i) => {
+          // Headers
+          if (line.startsWith('# ')) {
+            return <h1 key={i} className="text-2xl font-bold mt-6 mb-4">{line.slice(2)}</h1>;
+          }
+          if (line.startsWith('## ')) {
+            return <h2 key={i} className="text-xl font-semibold mt-5 mb-3 text-primary">{line.slice(3)}</h2>;
+          }
+          if (line.startsWith('### ')) {
+            return <h3 key={i} className="text-lg font-medium mt-4 mb-2">{line.slice(4)}</h3>;
+          }
+          // Code blocks
+          if (line.startsWith('```')) {
+            return null; // Skip code block markers
+          }
+          // List items
+          if (line.startsWith('- ')) {
+            return <li key={i} className="ml-4">{line.slice(2)}</li>;
+          }
+          if (line.match(/^\d+\. /)) {
+            return <li key={i} className="ml-4">{line.replace(/^\d+\. /, '')}</li>;
+          }
+          // Regular paragraph
+          if (line.trim()) {
+            return <p key={i} className="my-2">{line}</p>;
+          }
+          return null;
+        })}
+      </div>
+    );
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -303,6 +429,18 @@ export default function Learn() {
             <span className="text-primary font-bold">{progressPercent}%</span>
           </div>
           <Progress value={progressPercent} className="h-2" />
+          
+          {certificate && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-3"
+              onClick={() => setShowCertificate(true)}
+            >
+              <Award className="h-4 w-4 mr-2 text-primary" />
+              View Certificate
+            </Button>
+          )}
         </div>
 
         {/* Course List */}
@@ -363,40 +501,32 @@ export default function Learn() {
                 <span className="capitalize">{currentLesson.lesson_type}</span>
               </div>
 
-              <div className="prose prose-invert max-w-none mb-8">
-                {currentLesson.content ? (
-                  <div className="whitespace-pre-wrap">{currentLesson.content}</div>
-                ) : (
-                  <div className="bg-secondary/50 rounded-xl p-8 text-center">
-                    <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      Lesson content is being prepared by AI Sensei. 
-                      Ask questions in the chat to learn more!
-                    </p>
-                  </div>
-                )}
+              <div className="mb-8">
+                {renderLessonContent()}
               </div>
 
-              <div className="flex gap-4">
-                <Button 
-                  size="lg" 
-                  className="flex-1"
-                  onClick={markLessonComplete}
-                  disabled={completedLessons.has(currentLesson.id)}
-                >
-                  {completedLessons.has(currentLesson.id) ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 mr-2" />
-                      Completed
-                    </>
-                  ) : (
-                    <>
-                      Mark Complete
-                      <ChevronRight className="h-5 w-5 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </div>
+              {currentLesson.lesson_type !== 'coding' && (
+                <div className="flex gap-4">
+                  <Button 
+                    size="lg" 
+                    className="flex-1"
+                    onClick={markLessonComplete}
+                    disabled={completedLessons.has(currentLesson.id)}
+                  >
+                    {completedLessons.has(currentLesson.id) ? (
+                      <>
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        Completed
+                      </>
+                    ) : (
+                      <>
+                        Mark Complete
+                        <ChevronRight className="h-5 w-5 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center justify-center h-full">
@@ -463,6 +593,18 @@ export default function Learn() {
           </div>
         </div>
       </div>
+
+      {/* Certificate Modal */}
+      {certificate && learningPath && (
+        <CertificateModal
+          open={showCertificate}
+          onOpenChange={setShowCertificate}
+          userName={userName}
+          pathTitle={learningPath.title}
+          certificateNumber={certificate.certificate_number}
+          issuedDate={certificate.issued_at}
+        />
+      )}
     </div>
   );
 }

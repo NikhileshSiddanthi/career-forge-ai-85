@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Search, MapPin, Building2, Clock, Briefcase, ExternalLink, 
-  Bookmark, BookmarkCheck, Filter, Loader2, ChevronDown 
+  Bookmark, BookmarkCheck, Loader2, GraduationCap, TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +31,18 @@ interface Job {
   url: string;
   skills: string[];
   isFresherFriendly: boolean;
+}
+
+interface UserSkill {
+  name: string;
+  proficiency: number;
+}
+
+interface LearningPath {
+  id: string;
+  title: string;
+  roleSlug: string;
+  estimatedHours: number;
 }
 
 const LOCATIONS = [
@@ -54,14 +67,20 @@ export default function Jobs() {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [fresherOnly, setFresherOnly] = useState(true);
   const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
-  const [userRole, setUserRole] = useState<{ id: string; title: string } | null>(null);
-  const [careerRoles, setCareerRoles] = useState<any[]>([]);
+  const [userRole, setUserRole] = useState<{ id: string; title: string; slug: string } | null>(null);
+  const [careerRoles, setCareerRoles] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+  const [userSkills, setUserSkills] = useState<UserSkill[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
 
   useEffect(() => {
     fetchCareerRoles();
     fetchUserRole();
-    if (user) fetchSavedJobs();
+    if (user) {
+      fetchSavedJobs();
+      fetchUserSkills();
+      fetchLearningPaths();
+    }
   }, [user]);
 
   useEffect(() => {
@@ -71,7 +90,7 @@ export default function Jobs() {
   }, [selectedRoleId, userRole, selectedLocation, fresherOnly]);
 
   const fetchCareerRoles = async () => {
-    const { data } = await supabase.from('career_roles').select('id, title');
+    const { data } = await supabase.from('career_roles').select('id, title, slug');
     if (data) setCareerRoles(data);
   };
 
@@ -83,18 +102,52 @@ export default function Jobs() {
     
     const { data } = await supabase
       .from('user_career_paths')
-      .select('role_id, career_roles(id, title)')
+      .select('role_id, career_roles(id, title, slug)')
       .eq('user_id', user.id)
       .order('selected_at', { ascending: false })
       .limit(1)
       .single();
 
     if (data?.career_roles) {
-      const role = data.career_roles as { id: string; title: string };
+      const role = data.career_roles as { id: string; title: string; slug: string };
       setUserRole(role);
       setSelectedRoleId(role.id);
     } else {
       setIsLoading(false);
+    }
+  };
+
+  const fetchUserSkills = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('user_skills')
+      .select('skill_id, proficiency, skills(name)')
+      .eq('user_id', user.id);
+    
+    if (data) {
+      const skills = data.map(s => ({
+        name: (s.skills as { name: string })?.name || '',
+        proficiency: s.proficiency || 0
+      })).filter(s => s.name);
+      setUserSkills(skills);
+    }
+  };
+
+  const fetchLearningPaths = async () => {
+    const { data } = await supabase
+      .from('learning_paths')
+      .select('id, title, estimated_hours, career_roles(slug)')
+      .limit(10);
+    
+    if (data) {
+      const paths = data.map(p => ({
+        id: p.id,
+        title: p.title,
+        roleSlug: (p.career_roles as { slug: string })?.slug || '',
+        estimatedHours: p.estimated_hours || 40
+      }));
+      setLearningPaths(paths);
     }
   };
 
@@ -185,6 +238,36 @@ export default function Jobs() {
     }
   };
 
+  // Calculate skill match percentage for a job
+  const calculateMatchPercentage = (jobSkills: string[]): number => {
+    if (userSkills.length === 0 || jobSkills.length === 0) return 0;
+    
+    const userSkillNames = userSkills.map(s => s.name.toLowerCase());
+    const matchingSkills = jobSkills.filter(skill => 
+      userSkillNames.some(us => us.includes(skill.toLowerCase()) || skill.toLowerCase().includes(us))
+    );
+    
+    return Math.round((matchingSkills.length / jobSkills.length) * 100);
+  };
+
+  // Get missing skills for a job
+  const getMissingSkills = (jobSkills: string[]): string[] => {
+    if (userSkills.length === 0) return jobSkills;
+    
+    const userSkillNames = userSkills.map(s => s.name.toLowerCase());
+    return jobSkills.filter(skill => 
+      !userSkillNames.some(us => us.includes(skill.toLowerCase()) || skill.toLowerCase().includes(us))
+    );
+  };
+
+  // Get relevant learning path for missing skills
+  const getSuggestedLearningPath = (): LearningPath | null => {
+    const selectedRole = careerRoles.find(r => r.id === selectedRoleId);
+    if (!selectedRole) return null;
+    
+    return learningPaths.find(lp => lp.roleSlug === selectedRole.slug) || null;
+  };
+
   const filteredJobs = jobs.filter(job => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -193,6 +276,9 @@ export default function Jobs() {
       job.company.toLowerCase().includes(query) ||
       job.skills.some(s => s.toLowerCase().includes(query))
     );
+  }).sort((a, b) => {
+    // Sort by match percentage (higher first)
+    return calculateMatchPercentage(b.skills) - calculateMatchPercentage(a.skills);
   });
 
   const formatDate = (dateString: string) => {
@@ -205,6 +291,14 @@ export default function Jobs() {
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
   };
+
+  const getMatchColor = (percent: number) => {
+    if (percent >= 80) return 'text-green-400 bg-green-500/20';
+    if (percent >= 50) return 'text-yellow-400 bg-yellow-500/20';
+    return 'text-red-400 bg-red-500/20';
+  };
+
+  const suggestedPath = getSuggestedLearningPath();
 
   return (
     <div className="min-h-screen bg-background">
@@ -242,6 +336,34 @@ export default function Jobs() {
             Aggregated from LinkedIn, Naukri, Indeed & more - Fresher friendly opportunities
           </p>
         </div>
+
+        {/* Skill Match Banner */}
+        {user && userSkills.length > 0 && suggestedPath && (
+          <Card className="mb-6 border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Boost Your Match Rate</p>
+                    <p className="text-sm text-muted-foreground">
+                      Complete "{suggestedPath.title}" to unlock more job opportunities
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  size="sm"
+                  onClick={() => navigate(`/learn/${suggestedPath.roleSlug}`)}
+                >
+                  <GraduationCap className="h-4 w-4 mr-2" />
+                  Start Learning
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters */}
         <div className="bg-card border rounded-xl p-6 mb-8">
@@ -313,6 +435,7 @@ export default function Jobs() {
         <div className="flex items-center justify-between mb-4">
           <p className="text-muted-foreground">
             {isLoading ? 'Loading...' : `${filteredJobs.length} jobs found`}
+            {userSkills.length > 0 && !isLoading && ' (sorted by match %)'}
           </p>
           <Button variant="ghost" size="sm" onClick={fetchJobs}>
             Refresh
@@ -349,91 +472,139 @@ export default function Jobs() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredJobs.map((job, index) => (
-              <motion.div
-                key={job.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      {/* Company Logo */}
-                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center text-2xl flex-shrink-0">
-                        {job.companyLogo}
-                      </div>
+            {filteredJobs.map((job, index) => {
+              const matchPercent = calculateMatchPercentage(job.skills);
+              const missingSkills = getMissingSkills(job.skills);
 
-                      {/* Job Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <h3 className="text-lg font-semibold line-clamp-1">{job.title}</h3>
-                            <p className="text-muted-foreground flex items-center gap-2">
-                              <Building2 className="w-4 h-4" />
-                              {job.company}
-                            </p>
+              return (
+                <motion.div
+                  key={job.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <Card className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        {/* Company Logo */}
+                        <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center text-2xl flex-shrink-0">
+                          {job.companyLogo}
+                        </div>
+
+                        {/* Job Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <h3 className="text-lg font-semibold line-clamp-1">{job.title}</h3>
+                                {userSkills.length > 0 && (
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`${getMatchColor(matchPercent)} border-0`}
+                                  >
+                                    {matchPercent}% Match
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-muted-foreground flex items-center gap-2">
+                                <Building2 className="w-4 h-4" />
+                                {job.company}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => toggleSaveJob(job)}
+                              className="flex-shrink-0"
+                            >
+                              {savedJobs.has(job.url) ? (
+                                <BookmarkCheck className="w-5 h-5 text-primary" />
+                              ) : (
+                                <Bookmark className="w-5 h-5" />
+                              )}
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => toggleSaveJob(job)}
-                            className="flex-shrink-0"
-                          >
-                            {savedJobs.has(job.url) ? (
-                              <BookmarkCheck className="w-5 h-5 text-primary" />
-                            ) : (
-                              <Bookmark className="w-5 h-5" />
+
+                          <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4" />
+                              {job.location}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Briefcase className="w-4 h-4" />
+                              {job.jobType}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              {job.experience}
+                            </span>
+                          </div>
+
+                          {/* Skills with match indicator */}
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {job.skills.slice(0, 6).map((skill) => {
+                              const isMatch = userSkills.some(us => 
+                                us.name.toLowerCase().includes(skill.toLowerCase()) || 
+                                skill.toLowerCase().includes(us.name.toLowerCase())
+                              );
+                              return (
+                                <Badge 
+                                  key={skill} 
+                                  variant={isMatch ? "default" : "secondary"} 
+                                  className={`text-xs ${isMatch ? 'bg-green-600/20 text-green-400 border-green-500/30' : ''}`}
+                                >
+                                  {skill}
+                                </Badge>
+                              );
+                            })}
+                            {job.skills.length > 6 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{job.skills.length - 6} more
+                              </Badge>
                             )}
-                          </Button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {job.location}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Briefcase className="w-4 h-4" />
-                            {job.jobType}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            {job.experience}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {job.skills.slice(0, 4).map((skill) => (
-                            <Badge key={skill} variant="secondary" className="text-xs">
-                              {skill}
-                            </Badge>
-                          ))}
-                          {job.skills.length > 4 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{job.skills.length - 4} more
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                          <div className="flex items-center gap-4 text-sm">
-                            <span className="font-medium text-green-600">{job.salary}</span>
-                            <span className="text-muted-foreground">via {job.source}</span>
-                            <span className="text-muted-foreground">{formatDate(job.postedDate)}</span>
                           </div>
-                          <Button size="sm" className="gap-1" asChild>
-                            <a href={job.url} target="_blank" rel="noopener noreferrer">
-                              Apply <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </Button>
+
+                          {/* Learning suggestion for missing skills */}
+                          {userSkills.length > 0 && missingSkills.length > 0 && matchPercent < 80 && suggestedPath && (
+                            <div className="mt-3 p-3 rounded-lg bg-secondary/50 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <GraduationCap className="w-4 h-4 text-primary" />
+                                  <span>
+                                    Learn <strong className="text-foreground">{missingSkills.slice(0, 2).join(', ')}</strong>
+                                    {missingSkills.length > 2 && ` +${missingSkills.length - 2} more`} to improve match
+                                  </span>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => navigate(`/learn/${suggestedPath.roleSlug}`)}
+                                >
+                                  Learn Now
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="font-medium text-green-600">{job.salary}</span>
+                              <span className="text-muted-foreground">via {job.source}</span>
+                              <span className="text-muted-foreground">{formatDate(job.postedDate)}</span>
+                            </div>
+                            <Button size="sm" className="gap-1" asChild>
+                              <a href={job.url} target="_blank" rel="noopener noreferrer">
+                                Apply <ExternalLink className="w-4 h-4" />
+                              </a>
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </main>
