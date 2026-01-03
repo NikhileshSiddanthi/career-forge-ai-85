@@ -1,18 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Terminal, ArrowLeft, Building2, CheckCircle, Circle,
-  Loader2, ChevronRight, Send, Bot, User, Clock,
-  Lightbulb, Target
+import { 
+  Terminal, ArrowLeft, Loader2, Target, Briefcase,
+  GraduationCap, ChevronRight
 } from 'lucide-react';
-import { streamAISensei } from '@/lib/api/ai-sensei';
 import { toast } from 'sonner';
+import CompanySelector from '@/components/interview/CompanySelector';
+import RoundsList from '@/components/interview/RoundsList';
+import InterviewSimulation from '@/components/interview/InterviewSimulation';
 
 interface Company {
   id: string;
@@ -37,37 +36,26 @@ interface CareerRole {
   slug: string;
 }
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+type ViewState = 'select-company' | 'select-round' | 'simulation';
 
 export default function InterviewPrep() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [roles, setRoles] = useState<CareerRole[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [role, setRole] = useState<CareerRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<CareerRole | null>(null);
   const [rounds, setRounds] = useState<InterviewRound[]>([]);
-  const [currentRound, setCurrentRound] = useState<InterviewRound | null>(null);
+  const [selectedRound, setSelectedRound] = useState<InterviewRound | null>(null);
   const [completedRounds, setCompletedRounds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
-  
-  // AI Chat
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [viewState, setViewState] = useState<ViewState>('select-company');
 
   useEffect(() => {
     fetchData();
   }, [slug]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
 
   const fetchData = async () => {
     try {
@@ -79,15 +67,20 @@ export default function InterviewPrep() {
       
       setCompanies(companiesData || []);
 
-      // If slug provided, get role
+      // Get all roles for role selection
+      const { data: rolesData } = await supabase
+        .from('career_roles')
+        .select('id, title, slug')
+        .order('title');
+      
+      setRoles(rolesData || []);
+
+      // If slug provided, set that role
       if (slug) {
-        const { data: roleData } = await supabase
-          .from('career_roles')
-          .select('id, title, slug')
-          .eq('slug', slug)
-          .single();
-        
-        setRole(roleData);
+        const role = rolesData?.find(r => r.slug === slug);
+        if (role) {
+          setSelectedRole(role);
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -98,79 +91,80 @@ export default function InterviewPrep() {
 
   const selectCompany = async (company: Company) => {
     setSelectedCompany(company);
-    setChatMessages([]);
-    setCurrentRound(null);
     setCompletedRounds(new Set());
 
-    if (!role) {
-      // If no role, show company info
-      return;
-    }
-
-    // Fetch interview rounds for this company + role
-    const { data: roundsData } = await supabase
+    // Fetch rounds
+    let query = supabase
       .from('interview_rounds')
       .select('*')
       .eq('company_id', company.id)
-      .eq('role_id', role.id)
       .order('round_number');
 
+    if (selectedRole) {
+      query = query.eq('role_id', selectedRole.id);
+    }
+
+    const { data: roundsData } = await query;
     setRounds(roundsData || []);
-    
-    if (roundsData && roundsData.length > 0) {
-      setCurrentRound(roundsData[0]);
-    }
-  };
+    setViewState('select-round');
 
-  const sendMessage = async () => {
-    if (!chatInput.trim() || isAiLoading) return;
+    // Load completed rounds if user is logged in
+    if (user) {
+      const { data: progressData } = await supabase
+        .from('user_interview_progress')
+        .select('current_round')
+        .eq('user_id', user.id)
+        .eq('company_id', company.id);
 
-    const userMessage: ChatMessage = { role: 'user', content: chatInput };
-    setChatMessages(prev => [...prev, userMessage]);
-    setChatInput('');
-    setIsAiLoading(true);
-
-    let assistantContent = '';
-    const updateAssistant = (chunk: string) => {
-      assistantContent += chunk;
-      setChatMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last?.role === 'assistant') {
-          return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m);
+      if (progressData && progressData.length > 0) {
+        const maxRound = Math.max(...progressData.map(p => p.current_round || 0));
+        const completed = new Set<number>();
+        for (let i = 1; i < maxRound; i++) {
+          completed.add(i);
         }
-        return [...prev, { role: 'assistant', content: assistantContent }];
-      });
-    };
-
-    await streamAISensei({
-      messages: [...chatMessages, userMessage],
-      context: {
-        companyName: selectedCompany?.name,
-        roleTitle: role?.title,
-        roundName: currentRound?.round_name,
-      },
-      type: 'interview_prep',
-      onDelta: updateAssistant,
-      onDone: () => setIsAiLoading(false),
-      onError: (error) => {
-        toast.error(error.message);
-        setIsAiLoading(false);
-      },
-    });
+        setCompletedRounds(completed);
+      }
+    }
   };
 
-  const markRoundComplete = () => {
-    if (!currentRound) return;
-    
-    setCompletedRounds(prev => new Set([...prev, currentRound.round_number]));
-    
-    // Move to next round
-    const nextRound = rounds.find(r => r.round_number === currentRound.round_number + 1);
-    if (nextRound) {
-      setCurrentRound(nextRound);
-    } else {
-      toast.success('🎉 You completed all interview rounds!');
+  const selectRound = (round: InterviewRound) => {
+    setSelectedRound(round);
+    setViewState('simulation');
+  };
+
+  const handleSimulationComplete = async (score: number, feedback: string) => {
+    if (!selectedRound || !selectedCompany) return;
+
+    setCompletedRounds(prev => new Set([...prev, selectedRound.round_number]));
+
+    // Save progress if logged in
+    if (user && selectedRole) {
+      const nextRound = selectedRound.round_number + 1;
+      
+      await supabase
+        .from('user_interview_progress')
+        .upsert({
+          user_id: user.id,
+          company_id: selectedCompany.id,
+          role_id: selectedRole.id,
+          current_round: nextRound,
+        }, {
+          onConflict: 'user_id,company_id,role_id',
+        });
     }
+
+    toast.success(`Round completed with ${score}% score!`);
+  };
+
+  const exitSimulation = () => {
+    setSelectedRound(null);
+    setViewState('select-round');
+  };
+
+  const goBackToCompanies = () => {
+    setSelectedCompany(null);
+    setRounds([]);
+    setViewState('select-company');
   };
 
   if (loading) {
@@ -200,205 +194,141 @@ export default function InterviewPrep() {
             <span className="text-lg font-bold gradient-text">SkillForge</span>
           </Link>
 
-          <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Dashboard
-          </Button>
+          <div className="flex items-center gap-4">
+            <Link to="/roles">
+              <Button variant="ghost" size="sm">
+                <Briefcase className="h-4 w-4 mr-2" />
+                Explore Roles
+              </Button>
+            </Link>
+            {user ? (
+              <Button variant="outline" onClick={() => navigate('/dashboard')}>
+                Dashboard
+              </Button>
+            ) : (
+              <Button onClick={() => navigate('/auth')}>
+                Sign In
+              </Button>
+            )}
+          </div>
         </div>
       </nav>
 
       <main className="relative z-10 max-w-6xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+            <Target className="h-4 w-4" />
+            <span>Interview Prep</span>
+            {selectedCompany && (
+              <>
+                <ChevronRight className="h-4 w-4" />
+                <span>{selectedCompany.name}</span>
+              </>
+            )}
+            {selectedRound && (
+              <>
+                <ChevronRight className="h-4 w-4" />
+                <span>{selectedRound.round_name}</span>
+              </>
+            )}
+          </div>
+
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            Interview <span className="gradient-text">Preparation</span>
+            Interview <span className="gradient-text">Simulation</span>
           </h1>
           <p className="text-muted-foreground">
-            {role ? `Prepare for ${role.title} interviews at top companies` : 'Select a company to start practicing'}
+            Practice real interview rounds with AI-powered evaluation and feedback
           </p>
+
+          {/* Role selector */}
+          {viewState === 'select-company' && roles.length > 0 && (
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <span className="text-sm text-muted-foreground">Preparing for:</span>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant={!selectedRole ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedRole(null)}
+                >
+                  All Roles
+                </Button>
+                {roles.slice(0, 5).map((role) => (
+                  <Button
+                    key={role.id}
+                    variant={selectedRole?.id === role.id ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedRole(role)}
+                  >
+                    {role.title}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {!selectedCompany ? (
-          /* Company Selection */
-          <div className="grid md:grid-cols-3 gap-4">
-            {companies.map((company) => (
-              <button
-                key={company.id}
-                className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border text-left hover:border-primary transition-colors"
-                onClick={() => selectCompany(company)}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <Building2 className="h-8 w-8 text-primary" />
-                  <div>
-                    <h3 className="font-bold text-foreground">{company.name}</h3>
-                    <p className="text-xs text-muted-foreground">{company.industry}</p>
-                  </div>
+        {/* Content based on view state */}
+        {viewState === 'select-company' && (
+          <div className="space-y-6">
+            {/* Info cards */}
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                  <Target className="h-5 w-5 text-primary" />
                 </div>
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {company.description}
+                <h3 className="font-semibold text-foreground mb-1">Real Interview Flow</h3>
+                <p className="text-sm text-muted-foreground">
+                  Experience actual interview rounds company-by-company
                 </p>
-                <Badge variant={company.interview_difficulty === 'hard' ? 'destructive' : 'secondary'}>
-                  {company.interview_difficulty} difficulty
-                </Badge>
-              </button>
-            ))}
-          </div>
-        ) : (
-          /* Interview Prep View */
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Rounds Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="bg-card/80 backdrop-blur-sm rounded-xl terminal-border">
-                <div className="p-4 border-b border-border">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedCompany(null)}>
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    All Companies
-                  </Button>
+              </div>
+              <div className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                  <GraduationCap className="h-5 w-5 text-primary" />
                 </div>
-
-                <div className="p-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Building2 className="h-8 w-8 text-primary" />
-                    <div>
-                      <h2 className="font-bold text-foreground">{selectedCompany.name}</h2>
-                      {role && <p className="text-xs text-muted-foreground">{role.title}</p>}
-                    </div>
-                  </div>
-
-                  {rounds.length > 0 ? (
-                    <div className="space-y-2">
-                      {rounds.map((round) => (
-                        <button
-                          key={round.id}
-                          className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                            currentRound?.id === round.id 
-                              ? 'bg-primary/20 text-primary' 
-                              : completedRounds.has(round.round_number)
-                                ? 'text-muted-foreground'
-                                : 'hover:bg-secondary'
-                          }`}
-                          onClick={() => setCurrentRound(round)}
-                        >
-                          {completedRounds.has(round.round_number) ? (
-                            <CheckCircle className="h-5 w-5 text-primary" />
-                          ) : (
-                            <Circle className="h-5 w-5" />
-                          )}
-                          <div>
-                            <p className="font-medium">Round {round.round_number}</p>
-                            <p className="text-xs text-muted-foreground">{round.round_name}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      No interview rounds data yet. Ask AI Sensei about {selectedCompany.name} interviews!
-                    </p>
-                  )}
+                <h3 className="font-semibold text-foreground mb-1">AI Evaluation</h3>
+                <p className="text-sm text-muted-foreground">
+                  Get instant feedback on your answers with scoring
+                </p>
+              </div>
+              <div className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                  <Briefcase className="h-5 w-5 text-primary" />
                 </div>
+                <h3 className="font-semibold text-foreground mb-1">Sensei Assistant</h3>
+                <p className="text-sm text-muted-foreground">
+                  AI coach available for hints and guidance during practice
+                </p>
               </div>
             </div>
 
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {currentRound && (
-                <div className="bg-card/80 backdrop-blur-sm rounded-xl p-6 terminal-border">
-                  <div className="flex items-center justify-between mb-4">
-                    <Badge>Round {currentRound.round_number}</Badge>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      {currentRound.duration_minutes} mins
-                    </div>
-                  </div>
-
-                  <h2 className="text-2xl font-bold text-foreground mb-2">{currentRound.round_name}</h2>
-                  <p className="text-muted-foreground mb-6">{currentRound.description}</p>
-
-                  {currentRound.tips && (
-                    <div className="bg-primary/10 rounded-lg p-4 mb-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Lightbulb className="h-5 w-5 text-primary" />
-                        <span className="font-semibold text-foreground">Pro Tips</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{currentRound.tips}</p>
-                    </div>
-                  )}
-
-                  <Button onClick={markRoundComplete} disabled={completedRounds.has(currentRound.round_number)}>
-                    {completedRounds.has(currentRound.round_number) ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Completed
-                      </>
-                    ) : (
-                      <>
-                        Mark as Practiced
-                        <ChevronRight className="h-4 w-4 ml-2" />
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-
-              {/* AI Chat */}
-              <div className="bg-card/80 backdrop-blur-sm rounded-xl terminal-border overflow-hidden">
-                <div className="p-4 border-b border-border flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-primary" />
-                  <span className="font-semibold text-foreground">AI Interview Coach</span>
-                </div>
-
-                <ScrollArea className="h-80 p-4">
-                  {chatMessages.length === 0 ? (
-                    <div className="text-center text-muted-foreground text-sm py-8">
-                      <p>👋 Ready to practice for {selectedCompany.name}?</p>
-                      <p className="mt-2">Ask me interview questions, behavioral scenarios, or tips!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {chatMessages.map((msg, i) => (
-                        <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                          {msg.role === 'assistant' && (
-                            <Bot className="h-6 w-6 text-primary shrink-0" />
-                          )}
-                          <div className={`max-w-[80%] rounded-lg p-3 text-sm ${
-                            msg.role === 'user' 
-                              ? 'bg-primary text-primary-foreground' 
-                              : 'bg-secondary text-foreground'
-                          }`}>
-                            <div className="whitespace-pre-wrap">{msg.content}</div>
-                          </div>
-                          {msg.role === 'user' && (
-                            <User className="h-6 w-6 text-muted-foreground shrink-0" />
-                          )}
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </div>
-                  )}
-                </ScrollArea>
-
-                <div className="p-4 border-t border-border flex gap-2">
-                  <Textarea
-                    placeholder="Ask about interview questions, tips, or practice scenarios..."
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                      }
-                    }}
-                    className="resize-none h-10 min-h-0"
-                    rows={1}
-                  />
-                  <Button onClick={sendMessage} disabled={isAiLoading || !chatInput.trim()}>
-                    {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-foreground">Select a Company</h2>
+            <CompanySelector 
+              companies={companies} 
+              onSelect={selectCompany}
+            />
           </div>
+        )}
+
+        {viewState === 'select-round' && selectedCompany && (
+          <RoundsList
+            company={selectedCompany}
+            rounds={rounds}
+            roleTitle={selectedRole?.title}
+            completedRounds={completedRounds}
+            onSelectRound={selectRound}
+            onBack={goBackToCompanies}
+          />
+        )}
+
+        {viewState === 'simulation' && selectedRound && selectedCompany && (
+          <InterviewSimulation
+            round={selectedRound}
+            companyName={selectedCompany.name}
+            roleTitle={selectedRole?.title}
+            onComplete={handleSimulationComplete}
+            onExit={exitSimulation}
+          />
         )}
       </main>
     </div>
