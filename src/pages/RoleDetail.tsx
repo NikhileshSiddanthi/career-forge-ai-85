@@ -308,13 +308,10 @@ export default function RoleDetail() {
             size="lg"
             variant="outline"
             className="flex-1 terminal-border"
-            onClick={() => {
-              // TODO: Start learning path
-              navigate('/roles');
-            }}
+            onClick={() => navigate(`/learn/${role.slug}`)}
           >
+            <BookOpen className="h-5 w-5 mr-2" />
             Start Learning Path
-            <ChevronRight className="h-5 w-5 ml-2" />
           </Button>
         </div>
       </main>

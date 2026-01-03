@@ -151,10 +151,10 @@ export default function Onboarding() {
 
       toast({
         title: 'Profile Complete!',
-        description: 'Discovering your perfect roles...',
+        description: 'Welcome to SkillForge! Explore roles to start your journey.',
       });
 
-      navigate('/roles');
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error saving quiz:', error);
       toast({

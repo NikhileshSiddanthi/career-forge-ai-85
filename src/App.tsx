@@ -10,6 +10,9 @@ import Onboarding from "./pages/Onboarding";
 import Roles from "./pages/Roles";
 import RoleDetail from "./pages/RoleDetail";
 import Simulation from "./pages/Simulation";
+import Dashboard from "./pages/Dashboard";
+import Learn from "./pages/Learn";
+import InterviewPrep from "./pages/InterviewPrep";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +31,10 @@ const App = () => (
             <Route path="/roles" element={<Roles />} />
             <Route path="/role/:slug" element={<RoleDetail />} />
             <Route path="/simulation/:slug" element={<Simulation />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/learn/:slug" element={<Learn />} />
+            <Route path="/interview-prep" element={<InterviewPrep />} />
+            <Route path="/interview-prep/:slug" element={<InterviewPrep />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
