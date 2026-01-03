@@ -470,6 +470,39 @@ export type Database = {
           },
         ]
       }
+      saved_jobs: {
+        Row: {
+          company: string
+          id: string
+          job_title: string
+          job_url: string
+          location: string | null
+          saved_at: string
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          company: string
+          id?: string
+          job_title: string
+          job_url: string
+          location?: string | null
+          saved_at?: string
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          company?: string
+          id?: string
+          job_title?: string
+          job_url?: string
+          location?: string | null
+          saved_at?: string
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       skills: {
         Row: {
           category: Database["public"]["Enums"]["skill_category"]
@@ -654,6 +687,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_resume_analysis: {
+        Row: {
+          analyzed_at: string
+          created_at: string
+          extracted_skills: string[] | null
+          id: string
+          resume_url: string | null
+          suggested_roles: Json | null
+          user_id: string
+        }
+        Insert: {
+          analyzed_at?: string
+          created_at?: string
+          extracted_skills?: string[] | null
+          id?: string
+          resume_url?: string | null
+          suggested_roles?: Json | null
+          user_id: string
+        }
+        Update: {
+          analyzed_at?: string
+          created_at?: string
+          extracted_skills?: string[] | null
+          id?: string
+          resume_url?: string | null
+          suggested_roles?: Json | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

@@ -66,6 +66,22 @@ export default function Index() {
           >
             Interview Prep
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/skill-analyzer')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Skill Analyzer
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/jobs')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Jobs
+          </Button>
           {user ? (
             <>
               <Button
