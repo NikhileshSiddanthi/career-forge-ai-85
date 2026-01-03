@@ -10,7 +10,7 @@ export default function Index() {
 
   const handleGetStarted = () => {
     if (user) {
-      navigate('/onboarding');
+      navigate('/dashboard');
     } else {
       navigate('/auth');
     }
@@ -52,9 +52,14 @@ export default function Index() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              <span className="text-sm text-muted-foreground font-mono hidden sm:block">
-                <span className="text-primary">$</span> logged in as {user.email?.split('@')[0]}
-              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/dashboard')}
+                className="text-foreground"
+              >
+                Dashboard
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

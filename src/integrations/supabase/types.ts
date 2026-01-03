@@ -56,6 +56,274 @@ export type Database = {
         }
         Relationships: []
       }
+      certificates: {
+        Row: {
+          certificate_number: string
+          id: string
+          issued_at: string
+          learning_path_id: string
+          user_id: string
+        }
+        Insert: {
+          certificate_number: string
+          id?: string
+          issued_at?: string
+          learning_path_id: string
+          user_id: string
+        }
+        Update: {
+          certificate_number?: string
+          id?: string
+          issued_at?: string
+          learning_path_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_learning_path_id_fkey"
+            columns: ["learning_path_id"]
+            isOneToOne: false
+            referencedRelation: "learning_paths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          industry: string | null
+          interview_difficulty: string | null
+          logo_url: string | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          industry?: string | null
+          interview_difficulty?: string | null
+          logo_url?: string | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          industry?: string | null
+          interview_difficulty?: string | null
+          logo_url?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
+      courses: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          learning_path_id: string
+          order_index: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          learning_path_id: string
+          order_index?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          learning_path_id?: string
+          order_index?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courses_learning_path_id_fkey"
+            columns: ["learning_path_id"]
+            isOneToOne: false
+            referencedRelation: "learning_paths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_questions: {
+        Row: {
+          created_at: string
+          difficulty: string | null
+          id: string
+          question: string
+          question_type: string | null
+          round_id: string
+          sample_answer: string | null
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          question: string
+          question_type?: string | null
+          round_id: string
+          sample_answer?: string | null
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          question?: string
+          question_type?: string | null
+          round_id?: string
+          sample_answer?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_questions_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "interview_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_rounds: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          role_id: string
+          round_name: string
+          round_number: number
+          tips: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          role_id: string
+          round_name: string
+          round_number: number
+          tips?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          role_id?: string
+          round_name?: string
+          round_number?: number
+          tips?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_rounds_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interview_rounds_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "career_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_paths: {
+        Row: {
+          created_at: string
+          description: string | null
+          difficulty_level: string | null
+          estimated_hours: number | null
+          id: string
+          role_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          difficulty_level?: string | null
+          estimated_hours?: number | null
+          id?: string
+          role_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          difficulty_level?: string | null
+          estimated_hours?: number | null
+          id?: string
+          role_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_paths_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "career_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          content: string | null
+          course_id: string
+          created_at: string
+          estimated_minutes: number | null
+          id: string
+          lesson_type: string | null
+          order_index: number
+          title: string
+        }
+        Insert: {
+          content?: string | null
+          course_id: string
+          created_at?: string
+          estimated_minutes?: number | null
+          id?: string
+          lesson_type?: string | null
+          order_index?: number
+          title: string
+        }
+        Update: {
+          content?: string | null
+          course_id?: string
+          created_at?: string
+          estimated_minutes?: number | null
+          id?: string
+          lesson_type?: string | null
+          order_index?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -225,6 +493,167 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      user_career_paths: {
+        Row: {
+          id: string
+          phase: string | null
+          role_id: string
+          selected_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          phase?: string | null
+          role_id: string
+          selected_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          phase?: string | null
+          role_id?: string
+          selected_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_career_paths_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "career_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_completed_lessons: {
+        Row: {
+          completed_at: string
+          id: string
+          lesson_id: string
+          score: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          id?: string
+          lesson_id: string
+          score?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          id?: string
+          lesson_id?: string
+          score?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_completed_lessons_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_interview_progress: {
+        Row: {
+          company_id: string
+          completed_at: string | null
+          current_round: number | null
+          id: string
+          role_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          completed_at?: string | null
+          current_round?: number | null
+          id?: string
+          role_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          completed_at?: string | null
+          current_round?: number | null
+          id?: string
+          role_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_interview_progress_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_interview_progress_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "career_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_learning_progress: {
+        Row: {
+          completed_at: string | null
+          current_course_id: string | null
+          current_lesson_id: string | null
+          id: string
+          learning_path_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          current_course_id?: string | null
+          current_lesson_id?: string | null
+          id?: string
+          learning_path_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          current_course_id?: string | null
+          current_lesson_id?: string | null
+          id?: string
+          learning_path_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_learning_progress_current_course_id_fkey"
+            columns: ["current_course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_learning_progress_current_lesson_id_fkey"
+            columns: ["current_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_learning_progress_learning_path_id_fkey"
+            columns: ["learning_path_id"]
+            isOneToOne: false
+            referencedRelation: "learning_paths"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
