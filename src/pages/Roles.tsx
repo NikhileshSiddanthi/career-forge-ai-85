@@ -104,8 +104,9 @@ export default function Roles() {
     }
   };
 
-  const calculateMatchScore = (role: CareerRole, quiz: QuizResponse | null): number => {
-    if (!quiz?.interest_areas?.length) return 50 + Math.random() * 30; // Random baseline for non-logged users
+  const calculateMatchScore = (role: CareerRole, quiz: QuizResponse | null): number | undefined => {
+    // Only show match scores if user has completed their profile quiz
+    if (!quiz?.interest_areas?.length) return undefined;
     
     let score = 50;
     
@@ -114,8 +115,9 @@ export default function Roles() {
       score += 35;
     }
     
-    // Add some variance
-    score += Math.random() * 15;
+    // Add some variance based on role id (deterministic, not random)
+    const hash = role.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    score += hash % 15;
     
     return Math.min(Math.round(score), 99);
   };
@@ -208,7 +210,7 @@ export default function Roles() {
             Explore <span className="gradient-text">Career Roles</span>
           </h1>
           <p className="text-muted-foreground">
-            {quizResponse ? 'Roles matched to your profile' : 'Discover tech career paths across industries'}
+            {quizResponse ? 'Roles matched to your profile' : 'Complete your profile quiz to see personalized match scores'}
           </p>
         </div>
 
@@ -291,8 +293,8 @@ export default function Roles() {
                 className="group bg-card/80 backdrop-blur-sm rounded-xl border border-border hover:border-primary transition-all duration-300 overflow-hidden animate-fade-in"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                {/* Match Score Badge */}
-                {role.matchScore && (
+                {/* Match Score Badge - only shown if user has quiz data */}
+                {role.matchScore !== undefined && (
                   <div className="absolute top-4 right-4 z-10">
                     <div className={`px-2 py-1 rounded-full text-xs font-bold ${
                       role.matchScore >= 80 ? 'bg-primary text-primary-foreground' :
