@@ -15,6 +15,7 @@ import Learn from "./pages/Learn";
 import InterviewPrep from "./pages/InterviewPrep";
 import SkillAnalyzer from "./pages/SkillAnalyzer";
 import Jobs from "./pages/Jobs";
+import CodePlayground from "./pages/CodePlayground";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/interview-prep/:slug" element={<InterviewPrep />} />
             <Route path="/skill-analyzer" element={<SkillAnalyzer />} />
             <Route path="/jobs" element={<Jobs />} />
+            <Route path="/code-playground" element={<CodePlayground />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
