@@ -82,6 +82,14 @@ export default function Index() {
           >
             Jobs
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/internships')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Internships
+          </Button>
           {user ? (
             <>
               <Button

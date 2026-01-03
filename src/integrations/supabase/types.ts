@@ -156,6 +156,145 @@ export type Database = {
           },
         ]
       }
+      internship_prep_modules: {
+        Row: {
+          content: string | null
+          created_at: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          module_type: string | null
+          order_index: number | null
+          prep_path_id: string
+          resources: Json | null
+          title: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          module_type?: string | null
+          order_index?: number | null
+          prep_path_id: string
+          resources?: Json | null
+          title: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          module_type?: string | null
+          order_index?: number | null
+          prep_path_id?: string
+          resources?: Json | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internship_prep_modules_prep_path_id_fkey"
+            columns: ["prep_path_id"]
+            isOneToOne: false
+            referencedRelation: "internship_prep_paths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internship_prep_paths: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_weeks: number | null
+          id: string
+          internship_id: string
+          order_index: number | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_weeks?: number | null
+          id?: string
+          internship_id: string
+          order_index?: number | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_weeks?: number | null
+          id?: string
+          internship_id?: string
+          order_index?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internship_prep_paths_internship_id_fkey"
+            columns: ["internship_id"]
+            isOneToOne: false
+            referencedRelation: "internship_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internship_programs: {
+        Row: {
+          application_link: string | null
+          application_months: string[] | null
+          category: Database["public"]["Enums"]["internship_category"]
+          company: string
+          created_at: string
+          description: string | null
+          difficulty_level: string | null
+          duration: string | null
+          eligibility: string | null
+          id: string
+          is_women_only: boolean | null
+          logo_url: string | null
+          name: string
+          skills_required: string[] | null
+          stipend_range: string | null
+        }
+        Insert: {
+          application_link?: string | null
+          application_months?: string[] | null
+          category: Database["public"]["Enums"]["internship_category"]
+          company: string
+          created_at?: string
+          description?: string | null
+          difficulty_level?: string | null
+          duration?: string | null
+          eligibility?: string | null
+          id?: string
+          is_women_only?: boolean | null
+          logo_url?: string | null
+          name: string
+          skills_required?: string[] | null
+          stipend_range?: string | null
+        }
+        Update: {
+          application_link?: string | null
+          application_months?: string[] | null
+          category?: Database["public"]["Enums"]["internship_category"]
+          company?: string
+          created_at?: string
+          description?: string | null
+          difficulty_level?: string | null
+          duration?: string | null
+          eligibility?: string | null
+          id?: string
+          is_women_only?: boolean | null
+          logo_url?: string | null
+          name?: string
+          skills_required?: string[] | null
+          stipend_range?: string | null
+        }
+        Relationships: []
+      }
       interview_questions: {
         Row: {
           created_at: string
@@ -591,6 +730,85 @@ export type Database = {
           },
         ]
       }
+      user_internship_applications: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          id: string
+          internship_id: string
+          notes: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          internship_id: string
+          notes?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          internship_id?: string
+          notes?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_internship_applications_internship_id_fkey"
+            columns: ["internship_id"]
+            isOneToOne: false
+            referencedRelation: "internship_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_internship_prep_progress: {
+        Row: {
+          completed: boolean | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          module_id: string
+          score: number | null
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          module_id: string
+          score?: number | null
+          user_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          module_id?: string
+          score?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_internship_prep_progress_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "internship_prep_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_interview_progress: {
         Row: {
           company_id: string
@@ -822,6 +1040,13 @@ export type Database = {
     Enums: {
       app_role: "admin" | "mentor" | "student"
       career_category: "engineering" | "data" | "design" | "product"
+      internship_category:
+        | "global_tech"
+        | "product_based"
+        | "women_focused"
+        | "service_based"
+        | "startups_open"
+        | "competitive_coding"
       skill_category:
         | "language"
         | "framework"
@@ -957,6 +1182,14 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "mentor", "student"],
       career_category: ["engineering", "data", "design", "product"],
+      internship_category: [
+        "global_tech",
+        "product_based",
+        "women_focused",
+        "service_based",
+        "startups_open",
+        "competitive_coding",
+      ],
       skill_category: [
         "language",
         "framework",
